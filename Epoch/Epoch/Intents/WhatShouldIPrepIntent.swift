@@ -4,12 +4,13 @@ import EventKit
 struct WhatShouldIPrepIntent: AppIntent {
     static var title: LocalizedStringResource = "What Should I Prep"
 
+    @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let manager = EventKitManager()
         try await manager.requestAccess()
         let reminders = try await fetchReminders()
         let count = reminders.count
-        let firstClass = manager.tomorrowClasses(from: []) .first?.title ?? "none"
+        let firstClass = manager.tomorrowClasses(from: []).first?.title ?? "none"
         return .result(value: "You have \(count) items. First class: \(firstClass)")
     }
 

@@ -4,6 +4,7 @@ import EventKit
 struct PlanTonightIntent: AppIntent {
     static var title: LocalizedStringResource = "Plan Tonight"
 
+    @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let manager = EventKitManager()
         try await manager.requestAccess()
