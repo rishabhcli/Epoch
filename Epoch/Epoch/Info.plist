@@ -2,7 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>UIBackgroundModes</key>
-	<array/>
+        <key>UIBackgroundModes</key>
+        <array/>
+        <key>NSCalendarsFullAccessUsageDescription</key>
+        <string>Access to calendars is needed to schedule study sessions.</string>
+        <key>NSRemindersFullAccessUsageDescription</key>
+        <string>Access to reminders lets Epoch plan tasks and deadlines.</string>
 </dict>
 </plist>

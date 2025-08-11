@@ -1,32 +1,16 @@
-//
-//  EpochApp.swift
-//  Epoch
-//
-//  Created by Rishabh Bansal on 8/10/25.
-//
-
 import SwiftUI
-import SwiftData
 
 @main
 struct EpochApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @StateObject private var settingsModel = SettingsModel()
+    @StateObject private var eventKit = EventKitManager()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            DashboardView()
+                .environmentObject(eventKit)
+                .environmentObject(settingsModel)
+                .task { await NotificationManager.shared.requestAuthorization() }
         }
-        .modelContainer(sharedModelContainer)
     }
 }
