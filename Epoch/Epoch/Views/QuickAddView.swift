@@ -9,7 +9,7 @@ struct QuickAddView: View {
             TextField("Reminder", text: $text)
                 .textFieldStyle(.roundedBorder)
             Button("Add") {
-                try? manager.addReminder(text: text, due: nil)
+                _ = try? manager.addReminder(text: text, due: nil)
                 text = ""
             }
         }
