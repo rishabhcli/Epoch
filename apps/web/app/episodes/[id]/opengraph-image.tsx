@@ -9,10 +9,11 @@ export const size = {
 };
 export const contentType = "image/png";
 
-export default async function Image({ params }: { params: { id: string } }) {
+export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const episode = await prisma.episode.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!episode) {

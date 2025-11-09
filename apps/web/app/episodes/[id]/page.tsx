@@ -7,14 +7,15 @@ import { AudioPlayer } from "@/components/audio/audio-player";
 import { generatePodcastEpisodeJsonLd, generateBreadcrumbJsonLd } from "@/lib/utils/json-ld";
 
 interface EpisodePageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export async function generateMetadata({
   params,
 }: EpisodePageProps): Promise<Metadata> {
+  const { id } = await params;
   const episode = await prisma.episode.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!episode) {
@@ -24,7 +25,7 @@ export async function generateMetadata({
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const episodeUrl = `${baseUrl}/episodes/${episode.id}`;
+  const episodeUrl = `${baseUrl}/episodes/${id}`;
 
   return {
     title: episode.title,
@@ -47,10 +48,11 @@ export async function generateMetadata({
 }
 
 export default async function EpisodePage({ params }: EpisodePageProps) {
+  const { id } = await params;
   const session = await auth();
 
   const episode = await prisma.episode.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!episode) {
@@ -89,7 +91,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
   const breadcrumbJsonLd = generateBreadcrumbJsonLd([
     { name: "Home", url: baseUrl },
     { name: "Episodes", url: `${baseUrl}/episodes` },
-    { name: episode.title, url: `${baseUrl}/episodes/${episode.id}` },
+    { name: episode.title, url: `${baseUrl}/episodes/${id}` },
   ]);
 
   return (
