@@ -1,0 +1,202 @@
+import { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/db";
+import { auth } from "@/auth";
+import { AudioPlayer } from "@/components/audio/audio-player";
+
+interface EpisodePageProps {
+  params: { id: string };
+}
+
+export async function generateMetadata({
+  params,
+}: EpisodePageProps): Promise<Metadata> {
+  const episode = await prisma.episode.findUnique({
+    where: { id: params.id },
+  });
+
+  if (!episode) {
+    return {
+      title: "Episode Not Found",
+    };
+  }
+
+  return {
+    title: episode.title,
+    description: episode.subtitle || episode.description || episode.title,
+    openGraph: {
+      title: episode.title,
+      description: episode.subtitle || episode.description || episode.title,
+      type: "music.song",
+    },
+  };
+}
+
+export default async function EpisodePage({ params }: EpisodePageProps) {
+  const session = await auth();
+
+  const episode = await prisma.episode.findUnique({
+    where: { id: params.id },
+  });
+
+  if (!episode) {
+    notFound();
+  }
+
+  // Check access permissions
+  if (episode.userId && episode.userId !== session?.user?.id) {
+    notFound(); // Hide private episodes from other users
+  }
+
+  // Parse sources from JSON
+  const sources = (episode.sources as any) || [];
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-800">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/episodes"
+              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+              Back to Episodes
+            </Link>
+            <Link
+              href="/"
+              className="text-xl font-bold text-gray-900 dark:text-white"
+            >
+              Epoch Pod
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+        {/* Episode header */}
+        <div className="mb-8">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+              {episode.duration
+                ? `${Math.round(episode.duration / 60)} min`
+                : "New"}
+            </span>
+            {episode.userId && (
+              <span className="inline-flex items-center rounded-full bg-purple-100 px-3 py-1 text-sm font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-300">
+                Private
+              </span>
+            )}
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {episode.publishedAt
+                ? new Date(episode.publishedAt).toLocaleDateString("en-US", {
+                    month: "long",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "Just added"}
+            </span>
+          </div>
+
+          <h1 className="mb-3 text-4xl font-bold tracking-tight text-gray-900 dark:text-white">
+            {episode.title}
+          </h1>
+
+          {episode.subtitle && (
+            <p className="text-xl text-gray-600 dark:text-gray-400">
+              {episode.subtitle}
+            </p>
+          )}
+        </div>
+
+        {/* Audio player */}
+        {episode.audioUrl && (
+          <div className="mb-12">
+            <AudioPlayer
+              src={episode.audioUrl}
+              title={episode.title}
+              duration={episode.duration || undefined}
+            />
+          </div>
+        )}
+
+        {/* Transcript */}
+        {episode.transcript && (
+          <div
+            id="transcript"
+            className="mb-12 rounded-lg bg-white p-8 shadow dark:bg-gray-800"
+          >
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Transcript
+              </h2>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(episode.transcript || "");
+                }}
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Copy
+              </button>
+            </div>
+            <div className="prose prose-gray max-w-none dark:prose-invert">
+              <p className="whitespace-pre-wrap leading-relaxed">
+                {episode.transcript}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Sources */}
+        {sources.length > 0 && (
+          <div className="rounded-lg bg-white p-8 shadow dark:bg-gray-800">
+            <h2 className="mb-6 text-2xl font-bold text-gray-900 dark:text-white">
+              Sources & Citations
+            </h2>
+            <ul className="space-y-4">
+              {sources.map((source: any, index: number) => (
+                <li
+                  key={index}
+                  className="border-l-4 border-blue-500 pl-4 text-gray-700 dark:text-gray-300"
+                >
+                  <div className="font-semibold">{source.title}</div>
+                  {source.author && (
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      {source.author}
+                      {source.year && ` (${source.year})`}
+                    </div>
+                  )}
+                  {source.url && (
+                    <a
+                      href={source.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+                    >
+                      View source →
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
