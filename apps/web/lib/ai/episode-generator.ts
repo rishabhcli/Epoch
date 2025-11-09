@@ -52,9 +52,10 @@ export async function generateEpisode(
   // Create episode record in database
   const episode = await prisma.episode.create({
     data: {
+      title: `Generating: ${topic}`, // Temporary title, will be updated with outline
       topic,
       era,
-      userId,
+      userId: userId || null,
       status: "GENERATING_OUTLINE",
       guid: nanoid(),
     },

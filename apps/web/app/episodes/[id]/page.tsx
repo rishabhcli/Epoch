@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { AudioPlayer } from "@/components/audio/audio-player";
+import { generatePodcastEpisodeJsonLd, generateBreadcrumbJsonLd } from "@/lib/utils/json-ld";
 
 interface EpisodePageProps {
   params: { id: string };
@@ -22,6 +23,9 @@ export async function generateMetadata({
     };
   }
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const episodeUrl = `${baseUrl}/episodes/${episode.id}`;
+
   return {
     title: episode.title,
     description: episode.subtitle || episode.description || episode.title,
@@ -29,6 +33,15 @@ export async function generateMetadata({
       title: episode.title,
       description: episode.subtitle || episode.description || episode.title,
       type: "music.song",
+      url: episodeUrl,
+      ...(episode.audioUrl && {
+        audio: episode.audioUrl,
+      }),
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: episode.title,
+      description: episode.subtitle || episode.description || episode.title,
     },
   };
 }
@@ -49,13 +62,51 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
     notFound(); // Hide private episodes from other users
   }
 
+  // Get show metadata for JSON-LD
+  let show = await prisma.show.findFirst();
+
+  if (!show) {
+    show = await prisma.show.create({
+      data: {
+        title: process.env.NEXT_PUBLIC_SITE_NAME || "Epoch Pod",
+        description:
+          "Personalized history podcasts delivered to your inbox. Explore any era, topic, or moment in time with AI-generated episodes.",
+        ownerName: "Epoch Pod",
+        ownerEmail: process.env.RESEND_FROM_EMAIL || "noreply@epoch.fm",
+        language: "en-us",
+        category: "History",
+        explicit: false,
+      },
+    });
+  }
+
   // Parse sources from JSON
   const sources = (episode.sources as any) || [];
 
+  // Generate JSON-LD structured data
+  const episodeJsonLd = generatePodcastEpisodeJsonLd(episode, show);
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const breadcrumbJsonLd = generateBreadcrumbJsonLd([
+    { name: "Home", url: baseUrl },
+    { name: "Episodes", url: `${baseUrl}/episodes` },
+    { name: episode.title, url: `${baseUrl}/episodes/${episode.id}` },
+  ]);
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-800">
+    <>
+      {/* JSON-LD structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(episodeJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Header */}
+        <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-800">
         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <Link
@@ -198,5 +249,6 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
         )}
       </main>
     </div>
+    </>
   );
 }

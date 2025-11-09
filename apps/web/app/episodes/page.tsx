@@ -2,14 +2,44 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
+import { generatePodcastSeriesJsonLd } from "@/lib/utils/json-ld";
 
-export const metadata: Metadata = {
-  title: "Episodes",
-  description: "Browse all Epoch Pod history podcast episodes",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const show = await prisma.show.findFirst();
+
+  return {
+    title: `Episodes - ${show?.title || "Epoch Pod"}`,
+    description: show?.description || "Browse all Epoch Pod history podcast episodes",
+    openGraph: {
+      title: "Episodes",
+      description: show?.description || "Browse all Epoch Pod history podcast episodes",
+      type: "website",
+    },
+  };
+}
 
 export default async function EpisodesPage() {
   const session = await auth();
+
+  // Get show metadata for JSON-LD
+  let show = await prisma.show.findFirst();
+
+  if (!show) {
+    show = await prisma.show.create({
+      data: {
+        title: process.env.NEXT_PUBLIC_SITE_NAME || "Epoch Pod",
+        description:
+          "Personalized history podcasts delivered to your inbox. Explore any era, topic, or moment in time with AI-generated episodes.",
+        ownerName: "Epoch Pod",
+        ownerEmail: process.env.RESEND_FROM_EMAIL || "noreply@epoch.fm",
+        language: "en-us",
+        category: "History",
+        explicit: false,
+      },
+    });
+  }
+
+  const podcastSeriesJsonLd = generatePodcastSeriesJsonLd(show);
 
   // Get published episodes (public + user's private episodes if logged in)
   const episodes = await prisma.episode.findMany({
@@ -30,9 +60,16 @@ export default async function EpisodesPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-800">
+    <>
+      {/* JSON-LD structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(podcastSeriesJsonLd) }}
+      />
+
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Header */}
+        <header className="border-b border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-800">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between">
             <div>
@@ -186,5 +223,6 @@ export default async function EpisodesPage() {
         )}
       </main>
     </div>
+    </>
   );
 }

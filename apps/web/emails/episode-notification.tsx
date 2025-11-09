@@ -45,11 +45,11 @@ export default function EpisodeNotification({
 
       {/* Episode details */}
       <Section style={episodeCard}>
-        <Heading as="h2" style={episodeTitle}>
+        <Heading as="h2" style={episodeTitleStyle}>
           {episodeTitle}
         </Heading>
         {episodeSubtitle && (
-          <Text style={episodeSubtitle}>{episodeSubtitle}</Text>
+          <Text style={episodeSubtitleStyle}>{episodeSubtitle}</Text>
         )}
         <Text style={episodeMeta}>
           <span style={metaBadge}>{durationMinutes} min</span>
@@ -136,14 +136,14 @@ const episodeCard = {
   marginBottom: "24px",
 };
 
-const episodeTitle = {
+const episodeTitleStyle = {
   fontSize: "20px",
   fontWeight: "bold",
   color: "#111111",
   margin: "0 0 8px",
 };
 
-const episodeSubtitle = {
+const episodeSubtitleStyle = {
   fontSize: "16px",
   color: "#666666",
   margin: "0 0 12px",

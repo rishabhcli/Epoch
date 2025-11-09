@@ -1,13 +1,67 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/db";
+import { generatePodcastSeriesJsonLd, generateWebsiteJsonLd } from "@/lib/utils/json-ld";
+
+export async function generateMetadata() {
+  const show = await prisma.show.findFirst();
+
+  return {
+    title: show?.title || "Epoch Pod - AI-Generated History Podcasts",
+    description: show?.description || "Personalized history podcasts delivered to your inbox. Explore any era, topic, or moment in time with AI-generated episodes.",
+    openGraph: {
+      title: show?.title || "Epoch Pod",
+      description: show?.description || "Personalized history podcasts delivered to your inbox",
+      type: "website",
+      siteName: "Epoch Pod",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: show?.title || "Epoch Pod",
+      description: show?.description || "Personalized history podcasts delivered to your inbox",
+    },
+  };
+}
 
 export default async function Home() {
   const session = await auth();
 
+  // Get or create the default show metadata
+  let show = await prisma.show.findFirst();
+
+  if (!show) {
+    show = await prisma.show.create({
+      data: {
+        title: process.env.NEXT_PUBLIC_SITE_NAME || "Epoch Pod",
+        description:
+          "Personalized history podcasts delivered to your inbox. Explore any era, topic, or moment in time with AI-generated episodes.",
+        ownerName: "Epoch Pod",
+        ownerEmail: process.env.RESEND_FROM_EMAIL || "noreply@epoch.fm",
+        language: "en-us",
+        category: "History",
+        explicit: false,
+      },
+    });
+  }
+
+  const podcastSeriesJsonLd = generatePodcastSeriesJsonLd(show);
+  const websiteJsonLd = generateWebsiteJsonLd(show);
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-24">
-      <main className="flex flex-col items-center gap-8 text-center">
-        <h1 className="text-6xl font-bold">Epoch Pod</h1>
+    <>
+      {/* JSON-LD structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(podcastSeriesJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
+      />
+
+      <div className="flex min-h-screen flex-col items-center justify-center p-24">
+        <main className="flex flex-col items-center gap-8 text-center">
+          <h1 className="text-6xl font-bold">Epoch Pod</h1>
         <p className="max-w-2xl text-xl text-gray-600 dark:text-gray-400">
           Personalized history podcasts, delivered to your inbox. Explore any
           era, topic, or moment in time with AI-generated episodes.
@@ -108,5 +162,6 @@ export default async function Home() {
         </div>
       </main>
     </div>
+    </>
   );
 }

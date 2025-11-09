@@ -46,10 +46,11 @@ export async function sendEmail(options: SendEmailOptions) {
   const unsubscribeOneClickUrl = `${APP_URL}/api/unsubscribe/one-click`;
 
   // Render email HTML
-  const html = render(react, {
+  const htmlContent = await render(react, {
     // Replace placeholder with actual URL
     pretty: false,
-  }).replace("{{unsubscribeUrl}}", unsubscribeUrl);
+  });
+  const html = htmlContent.replace("{{unsubscribeUrl}}", unsubscribeUrl);
 
   try {
     const response = await resend.emails.send({
