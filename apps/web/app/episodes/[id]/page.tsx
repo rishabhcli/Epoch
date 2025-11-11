@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { AudioPlayer } from "@/components/audio/audio-player";
+import { InterviewPlayer } from "@/components/interview/interview-player";
 import { generatePodcastEpisodeJsonLd, generateBreadcrumbJsonLd } from "@/lib/utils/json-ld";
 
 interface EpisodePageProps {
@@ -16,6 +17,9 @@ export async function generateMetadata({
   const { id } = await params;
   const episode = await prisma.episode.findUnique({
     where: { id },
+    include: {
+      interview: true,
+    },
   });
 
   if (!episode) {
@@ -53,6 +57,9 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
 
   const episode = await prisma.episode.findUnique({
     where: { id },
+    include: {
+      interview: true,
+    },
   });
 
   if (!episode) {
@@ -177,8 +184,27 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
           )}
         </div>
 
-        {/* Audio player */}
-        {episode.audioUrl && (
+        {/* Audio player / Interview player */}
+        {episode.type === 'INTERVIEW' && episode.interview && episode.audioUrl ? (
+          <div className="mb-12">
+            <InterviewPlayer
+              episode={{
+                id: episode.id,
+                title: episode.title,
+                description: episode.description || '',
+                audioUrl: episode.audioUrl,
+                duration: episode.duration || undefined,
+                interview: {
+                  guestName: episode.interview.guestName,
+                  guestRole: episode.interview.guestRole,
+                  guestEra: episode.interview.guestEra,
+                  topic: episode.interview.topic,
+                  questions: episode.interview.questions as any[],
+                },
+              }}
+            />
+          </div>
+        ) : episode.audioUrl ? (
           <div className="mb-12">
             <AudioPlayer
               src={episode.audioUrl}
@@ -186,7 +212,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
               duration={episode.duration || undefined}
             />
           </div>
-        )}
+        ) : null}
 
         {/* Transcript */}
         {episode.transcript && (
