@@ -5,6 +5,7 @@
 
 import { openai, DEFAULT_MODEL, DEFAULT_TTS_MODEL } from './openai';
 import { VOICE_PRESETS, getVoiceOrDefault } from './voices';
+import { retryGPTCompletion, retryTTSGeneration } from './retry';
 import {
   DebateOutlineSchema,
   DebateScriptSchema,

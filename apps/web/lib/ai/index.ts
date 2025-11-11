@@ -1,6 +1,7 @@
 export * from "./openai";
 export * from "./voices";
 export * from "./retry";
+export * from "./cost-estimator";
 export * from "./outline-generator";
 export * from "./script-generator";
 export * from "./audio-generator";

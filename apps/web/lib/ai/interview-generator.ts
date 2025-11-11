@@ -5,6 +5,7 @@
 
 import { openai, DEFAULT_MODEL, DEFAULT_TTS_MODEL } from './openai';
 import { VOICE_PRESETS, getGuestVoice, getVoiceOrDefault, type OpenAIVoice } from './voices';
+import { retryGPTCompletion, retryTTSGeneration } from './retry';
 import {
   InterviewOutlineSchema,
   InterviewScriptSchema,
@@ -23,12 +24,13 @@ export async function generateInterviewOutline(
 ): Promise<InterviewOutline> {
   const jsonSchema = zodToJsonSchema(InterviewOutlineSchema, 'interviewOutline');
 
-  const completion = await openai.beta.chat.completions.parse({
-    model: DEFAULT_MODEL,
-    messages: [
-      {
-        role: 'system',
-        content: `You are a historical researcher and podcast producer. Create an outline for an interview with a historical figure.
+  const completion = await retryGPTCompletion(() =>
+    openai.beta.chat.completions.parse({
+      model: DEFAULT_MODEL,
+      messages: [
+        {
+          role: 'system',
+          content: `You are a historical researcher and podcast producer. Create an outline for an interview with a historical figure.
 
 Requirements:
 - Research the guest's life, work, and historical context thoroughly
@@ -40,26 +42,27 @@ Requirements:
 - Make the interview accessible to general audiences while maintaining accuracy
 
 The interview should feel like a modern podcast - conversational, engaging, and insightful - while being historically accurate.`,
-      },
-      {
-        role: 'user',
-        content: `Create an interview outline:
+        },
+        {
+          role: 'user',
+          content: `Create an interview outline:
 Guest: ${guestName}
 ${topic ? `Topic focus: ${topic}` : 'Topic: Broad overview of their life and major contributions'}
 ${angle ? `Angle: ${angle}` : 'Angle: Comprehensive exploration of their life and work'}
 
 Design a compelling interview that brings this historical figure to life for modern listeners.`,
+        },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'interview_outline',
+          strict: true,
+          schema: jsonSchema.definitions!.interviewOutline,
+        },
       },
-    ],
-    response_format: {
-      type: 'json_schema',
-      json_schema: {
-        name: 'interview_outline',
-        strict: true,
-        schema: jsonSchema.definitions!.interviewOutline,
-      },
-    },
-  });
+    })
+  );
 
   const parsed = completion.choices[0].message.parsed;
   if (!parsed) {
@@ -77,7 +80,8 @@ export async function generateInterviewScript(
 ): Promise<InterviewScript> {
   const jsonSchema = zodToJsonSchema(InterviewScriptSchema, 'interviewScript');
 
-  const completion = await openai.beta.chat.completions.parse({
+  const completion = await retryGPTCompletion(() =>
+    openai.beta.chat.completions.parse({
     model: DEFAULT_MODEL,
     messages: [
       {
@@ -119,7 +123,8 @@ Create a compelling dialogue that feels like a real conversation between a moder
         schema: jsonSchema.definitions!.interviewScript,
       },
     },
-  });
+    })
+  );
 
   const parsed = completion.choices[0].message.parsed;
   if (!parsed) {
@@ -155,12 +160,14 @@ export async function generateInterviewAudio(
   try {
     // Generate intro audio
     console.log(`Generating intro with voice: ${finalHostVoice}`);
-    const introResponse = await openai.audio.speech.create({
-      model: DEFAULT_TTS_MODEL,
-      voice: finalHostVoice as any,
-      input: script.intro.text,
-      speed: VOICE_PRESETS.interview.hostSpeed,
-    });
+    const introResponse = await retryTTSGeneration(() =>
+      openai.audio.speech.create({
+        model: DEFAULT_TTS_MODEL,
+        voice: finalHostVoice as any,
+        input: script.intro.text,
+        speed: VOICE_PRESETS.interview.hostSpeed,
+      })
+    );
     const introBuffer = Buffer.from(await introResponse.arrayBuffer());
     audioSegments.push(introBuffer);
 
@@ -175,12 +182,14 @@ export async function generateInterviewAudio(
         ? VOICE_PRESETS.interview.guestSpeed
         : VOICE_PRESETS.interview.hostSpeed;
 
-      const response = await openai.audio.speech.create({
-        model: DEFAULT_TTS_MODEL,
-        voice: voice as any,
-        input: segment.text,
-        speed,
-      });
+      const response = await retryTTSGeneration(() =>
+        openai.audio.speech.create({
+          model: DEFAULT_TTS_MODEL,
+          voice: voice as any,
+          input: segment.text,
+          speed,
+        })
+      );
 
       const buffer = Buffer.from(await response.arrayBuffer());
       audioSegments.push(buffer);
@@ -192,12 +201,14 @@ export async function generateInterviewAudio(
 
     // Generate outro audio
     console.log('Generating outro audio...');
-    const outroResponse = await openai.audio.speech.create({
-      model: DEFAULT_TTS_MODEL,
-      voice: finalHostVoice as any,
-      input: script.outro.text,
-      speed: VOICE_PRESETS.interview.hostSpeed,
-    });
+    const outroResponse = await retryTTSGeneration(() =>
+      openai.audio.speech.create({
+        model: DEFAULT_TTS_MODEL,
+        voice: finalHostVoice as any,
+        input: script.outro.text,
+        speed: VOICE_PRESETS.interview.hostSpeed,
+      })
+    );
     const outroBuffer = Buffer.from(await outroResponse.arrayBuffer());
     audioSegments.push(outroBuffer);
 
