@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { AudioPlayer } from "@/components/audio/audio-player";
 import { InterviewPlayer } from "@/components/interview/interview-player";
 import { DebatePlayer } from "@/components/debate/debate-player";
+import { AdventurePlayer } from "@/components/adventure/adventure-player";
 import { generatePodcastEpisodeJsonLd, generateBreadcrumbJsonLd } from "@/lib/utils/json-ld";
 
 interface EpisodePageProps {
@@ -62,6 +63,20 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
     include: {
       interview: true,
       debate: true,
+      adventureNode: {
+        include: {
+          adventure: true,
+          choices: {
+            include: {
+              nextNode: {
+                include: {
+                  episode: true,
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 
@@ -72,6 +87,64 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
   // Check access permissions
   if (episode.userId && episode.userId !== session?.user?.id) {
     notFound(); // Hide private episodes from other users
+  }
+
+  // Handle adventure episodes - load or create journey
+  let journey = null;
+  if (episode.type === 'ADVENTURE' && episode.adventureNode && session?.user?.id) {
+    // Check if user has an active journey
+    journey = await prisma.userJourney.findUnique({
+      where: {
+        userId_adventureId: {
+          userId: session.user.id,
+          adventureId: episode.adventureNode.adventureId,
+        },
+      },
+      include: {
+        currentNode: {
+          include: {
+            episode: true,
+            choices: {
+              include: {
+                nextNode: {
+                  include: {
+                    episode: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // If no journey exists, create one starting at this node
+    if (!journey) {
+      journey = await prisma.userJourney.create({
+        data: {
+          userId: session.user.id,
+          adventureId: episode.adventureNode.adventureId,
+          currentNodeId: episode.adventureNode.id,
+          path: [],
+        },
+        include: {
+          currentNode: {
+            include: {
+              episode: true,
+              choices: {
+                include: {
+                  nextNode: {
+                    include: {
+                      episode: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
   }
 
   // Get show metadata for JSON-LD
@@ -187,7 +260,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
           )}
         </div>
 
-        {/* Audio player / Interview player / Debate player */}
+        {/* Audio player / Interview player / Debate player / Adventure player */}
         {episode.type === 'INTERVIEW' && episode.interview && episode.audioUrl ? (
           <div className="mb-12">
             <InterviewPlayer
@@ -223,6 +296,35 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
                   position2: episode.debate.position2,
                   topic: episode.debate.topic,
                 },
+              }}
+            />
+          </div>
+        ) : episode.type === 'ADVENTURE' && episode.adventureNode && journey ? (
+          <div className="mb-12">
+            <AdventurePlayer
+              journey={{
+                id: journey.id,
+                adventureId: journey.adventureId,
+                currentNode: {
+                  id: journey.currentNode.id,
+                  title: journey.currentNode.title,
+                  nodeType: journey.currentNode.nodeType,
+                  endingType: journey.currentNode.endingType,
+                  episode: journey.currentNode.episode,
+                  choices: journey.currentNode.choices.map((c) => ({
+                    id: c.id,
+                    text: c.text,
+                    description: c.description,
+                    consequences: c.consequences,
+                  })),
+                },
+                path: journey.path as any[],
+                isCompleted: journey.isCompleted,
+              }}
+              adventure={{
+                title: episode.adventureNode.adventure.title,
+                description: episode.adventureNode.adventure.description,
+                era: episode.adventureNode.adventure.era,
               }}
             />
           </div>
