@@ -1,4 +1,5 @@
-import { openai, DEFAULT_TTS_MODEL, DEFAULT_TTS_VOICE } from "../ai/openai";
+import { openai, DEFAULT_TTS_MODEL } from "../ai/openai";
+import { VOICE_PRESETS } from "../ai/voices";
 import type {
   TTSAdapter,
   TTSOptions,
@@ -16,9 +17,9 @@ export class OpenAITTSAdapter implements TTSAdapter {
     options: TTSOptions = {}
   ): Promise<AudioResult> {
     const {
-      voice = DEFAULT_TTS_VOICE,
+      voice = VOICE_PRESETS.narrative.narrator,
       model = DEFAULT_TTS_MODEL,
-      speed = 1.0,
+      speed = VOICE_PRESETS.narrative.speed,
     } = options;
 
     try {

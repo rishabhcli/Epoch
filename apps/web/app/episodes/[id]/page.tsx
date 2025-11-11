@@ -4,6 +4,9 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { AudioPlayer } from "@/components/audio/audio-player";
+import { InterviewPlayer } from "@/components/interview/interview-player";
+import { DebatePlayer } from "@/components/debate/debate-player";
+import { AdventurePlayer } from "@/components/adventure/adventure-player";
 import { generatePodcastEpisodeJsonLd, generateBreadcrumbJsonLd } from "@/lib/utils/json-ld";
 
 interface EpisodePageProps {
@@ -16,6 +19,10 @@ export async function generateMetadata({
   const { id } = await params;
   const episode = await prisma.episode.findUnique({
     where: { id },
+    include: {
+      interview: true,
+      debate: true,
+    },
   });
 
   if (!episode) {
@@ -53,6 +60,24 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
 
   const episode = await prisma.episode.findUnique({
     where: { id },
+    include: {
+      interview: true,
+      debate: true,
+      adventureNode: {
+        include: {
+          adventure: true,
+          choices: {
+            include: {
+              nextNode: {
+                include: {
+                  episode: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!episode) {
@@ -62,6 +87,64 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
   // Check access permissions
   if (episode.userId && episode.userId !== session?.user?.id) {
     notFound(); // Hide private episodes from other users
+  }
+
+  // Handle adventure episodes - load or create journey
+  let journey = null;
+  if (episode.type === 'ADVENTURE' && episode.adventureNode && session?.user?.id) {
+    // Check if user has an active journey
+    journey = await prisma.userJourney.findUnique({
+      where: {
+        userId_adventureId: {
+          userId: session.user.id,
+          adventureId: episode.adventureNode.adventureId,
+        },
+      },
+      include: {
+        currentNode: {
+          include: {
+            episode: true,
+            choices: {
+              include: {
+                nextNode: {
+                  include: {
+                    episode: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // If no journey exists, create one starting at this node
+    if (!journey) {
+      journey = await prisma.userJourney.create({
+        data: {
+          userId: session.user.id,
+          adventureId: episode.adventureNode.adventureId,
+          currentNodeId: episode.adventureNode.id,
+          path: [],
+        },
+        include: {
+          currentNode: {
+            include: {
+              episode: true,
+              choices: {
+                include: {
+                  nextNode: {
+                    include: {
+                      episode: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+    }
   }
 
   // Get show metadata for JSON-LD
@@ -177,8 +260,75 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
           )}
         </div>
 
-        {/* Audio player */}
-        {episode.audioUrl && (
+        {/* Audio player / Interview player / Debate player / Adventure player */}
+        {episode.type === 'INTERVIEW' && episode.interview && episode.audioUrl ? (
+          <div className="mb-12">
+            <InterviewPlayer
+              episode={{
+                id: episode.id,
+                title: episode.title,
+                description: episode.description || '',
+                audioUrl: episode.audioUrl,
+                duration: episode.duration || undefined,
+                interview: {
+                  guestName: episode.interview.guestName,
+                  guestRole: episode.interview.guestRole,
+                  guestEra: episode.interview.guestEra,
+                  topic: episode.interview.topic,
+                  questions: episode.interview.questions as any[],
+                },
+              }}
+            />
+          </div>
+        ) : episode.type === 'DEBATE' && episode.debate && episode.audioUrl ? (
+          <div className="mb-12">
+            <DebatePlayer
+              episode={{
+                id: episode.id,
+                title: episode.title,
+                description: episode.description || '',
+                audioUrl: episode.audioUrl,
+                duration: episode.duration || undefined,
+                debate: {
+                  id: episode.debate.id,
+                  question: episode.debate.question,
+                  position1: episode.debate.position1,
+                  position2: episode.debate.position2,
+                  topic: episode.debate.topic,
+                },
+              }}
+            />
+          </div>
+        ) : episode.type === 'ADVENTURE' && episode.adventureNode && journey ? (
+          <div className="mb-12">
+            <AdventurePlayer
+              journey={{
+                id: journey.id,
+                adventureId: journey.adventureId,
+                currentNode: {
+                  id: journey.currentNode.id,
+                  title: journey.currentNode.title,
+                  nodeType: journey.currentNode.nodeType,
+                  endingType: journey.currentNode.endingType,
+                  episode: journey.currentNode.episode,
+                  choices: journey.currentNode.choices.map((c) => ({
+                    id: c.id,
+                    text: c.text,
+                    description: c.description,
+                    consequences: c.consequences,
+                  })),
+                },
+                path: journey.path as any[],
+                isCompleted: journey.isCompleted,
+              }}
+              adventure={{
+                title: episode.adventureNode.adventure.title,
+                description: episode.adventureNode.adventure.description,
+                era: episode.adventureNode.adventure.era,
+              }}
+            />
+          </div>
+        ) : episode.audioUrl ? (
           <div className="mb-12">
             <AudioPlayer
               src={episode.audioUrl}
@@ -186,7 +336,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
               duration={episode.duration || undefined}
             />
           </div>
-        )}
+        ) : null}
 
         {/* Transcript */}
         {episode.transcript && (

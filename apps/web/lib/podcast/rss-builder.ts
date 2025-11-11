@@ -34,7 +34,7 @@ export function buildRSSFeed(options: RSSFeedOptions): string {
     <atom:link href="${escapeXml(feedUrl)}" rel="self" type="application/rss+xml"/>
 
     <!-- iTunes tags -->
-    <itunes:author>${escapeXml(show.author)}</itunes:author>
+    <itunes:author>${escapeXml(show.author || show.ownerName)}</itunes:author>
     <itunes:subtitle>${escapeXml(show.subtitle || show.description.substring(0, 255))}</itunes:subtitle>
     <itunes:summary>${escapeXml(show.description)}</itunes:summary>
     <itunes:owner>
@@ -42,6 +42,7 @@ export function buildRSSFeed(options: RSSFeedOptions): string {
       <itunes:email>${escapeXml(show.ownerEmail)}</itunes:email>
     </itunes:owner>
     <itunes:explicit>${show.explicit ? "yes" : "no"}</itunes:explicit>
+    <itunes:type>episodic</itunes:type>
     <itunes:category text="${escapeXml(show.category)}">
       ${show.subCategory ? `<itunes:category text="${escapeXml(show.subCategory)}"/>` : ""}
     </itunes:category>
@@ -81,13 +82,14 @@ function buildRSSItem(episode: Episode, websiteUrl: string): string {
       ${episode.audioUrl ? `<enclosure
         url="${escapeXml(episode.audioUrl)}"
         length="${episode.audioBytes?.toString() || "0"}"
-        type="${escapeXml(episode.mimeType)}"/>` : ""}
+        type="audio/mpeg"/>` : ""}
 
       <!-- iTunes tags -->
       <itunes:title>${escapeXml(episode.title)}</itunes:title>
       ${episode.subtitle ? `<itunes:subtitle>${escapeXml(episode.subtitle)}</itunes:subtitle>` : ""}
       ${episode.duration ? `<itunes:duration>${episode.duration}</itunes:duration>` : ""}
       <itunes:explicit>${episode.explicit ? "yes" : "no"}</itunes:explicit>
+      <itunes:episodeType>full</itunes:episodeType>
       ${episode.season ? `<itunes:season>${episode.season}</itunes:season>` : ""}
       ${episode.episode ? `<itunes:episode>${episode.episode}</itunes:episode>` : ""}
 
