@@ -4,6 +4,7 @@
  */
 
 import { openai, DEFAULT_MODEL, DEFAULT_TTS_MODEL } from './openai';
+import { VOICE_PRESETS, getGuestVoice, getVoiceOrDefault, type OpenAIVoice } from './voices';
 import {
   InterviewOutlineSchema,
   InterviewScriptSchema,
@@ -130,34 +131,49 @@ Create a compelling dialogue that feels like a real conversation between a moder
 
 /**
  * Generate audio for the interview using multi-voice TTS
+ * @param script The interview script to convert to audio
+ * @param guestName The name of the guest (for voice selection)
+ * @param hostVoice Optional override for host voice
+ * @param guestVoice Optional override for guest voice
  */
 export async function generateInterviewAudio(
   script: InterviewScript,
-  hostVoice: string = 'onyx',
-  guestVoice: string = 'echo'
+  guestName?: string,
+  hostVoice?: string,
+  guestVoice?: string
 ): Promise<Buffer> {
   const audioSegments: Buffer[] = [];
 
+  // Use centralized voice configuration with smart defaults
+  const finalHostVoice = getVoiceOrDefault(hostVoice, VOICE_PRESETS.interview.host);
+  const finalGuestVoice = guestVoice
+    ? getVoiceOrDefault(guestVoice, VOICE_PRESETS.interview.guest)
+    : guestName
+      ? getGuestVoice(guestName)
+      : VOICE_PRESETS.interview.guest;
+
   try {
     // Generate intro audio
-    console.log('Generating intro audio...');
+    console.log(`Generating intro with voice: ${finalHostVoice}`);
     const introResponse = await openai.audio.speech.create({
       model: DEFAULT_TTS_MODEL,
-      voice: hostVoice as any,
+      voice: finalHostVoice as any,
       input: script.intro.text,
-      speed: 1.0,
+      speed: VOICE_PRESETS.interview.hostSpeed,
     });
     const introBuffer = Buffer.from(await introResponse.arrayBuffer());
     audioSegments.push(introBuffer);
 
     // Generate dialogue segments
     console.log(`Generating ${script.segments.length} dialogue segments...`);
+    console.log(`Host voice: ${finalHostVoice}, Guest voice: ${finalGuestVoice}`);
+
     for (let i = 0; i < script.segments.length; i++) {
       const segment = script.segments[i];
-      const voice = segment.speaker === 'HOST' ? hostVoice : guestVoice;
-
-      // Slightly slower speed for guest to sound more thoughtful
-      const speed = segment.speaker === 'GUEST' ? 0.95 : 1.0;
+      const voice = segment.speaker === 'HOST' ? finalHostVoice : finalGuestVoice;
+      const speed = segment.speaker === 'GUEST'
+        ? VOICE_PRESETS.interview.guestSpeed
+        : VOICE_PRESETS.interview.hostSpeed;
 
       const response = await openai.audio.speech.create({
         model: DEFAULT_TTS_MODEL,
@@ -178,19 +194,24 @@ export async function generateInterviewAudio(
     console.log('Generating outro audio...');
     const outroResponse = await openai.audio.speech.create({
       model: DEFAULT_TTS_MODEL,
-      voice: hostVoice as any,
+      voice: finalHostVoice as any,
       input: script.outro.text,
-      speed: 1.0,
+      speed: VOICE_PRESETS.interview.hostSpeed,
     });
     const outroBuffer = Buffer.from(await outroResponse.arrayBuffer());
     audioSegments.push(outroBuffer);
 
     console.log('Concatenating audio segments...');
+    console.log(`Total segments: ${audioSegments.length}`);
+
     // For now, simple concatenation
     // TODO: Use ffmpeg to add 0.3s silence between speakers for more natural pacing
     return Buffer.concat(audioSegments);
   } catch (error) {
     console.error('Error generating interview audio:', error);
+    if (error instanceof Error) {
+      throw new Error(`Failed to generate interview audio: ${error.message}`);
+    }
     throw new Error('Failed to generate interview audio');
   }
 }

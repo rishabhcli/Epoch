@@ -4,6 +4,7 @@
  */
 
 import { openai, DEFAULT_MODEL, DEFAULT_TTS_MODEL } from './openai';
+import { VOICE_PRESETS, getVoiceOrDefault } from './voices';
 import {
   DebateOutlineSchema,
   DebateScriptSchema,
@@ -93,9 +94,9 @@ Format:
 - MODERATOR concludes by summarizing both positions and asking listeners to vote
 
 Voice assignments:
-- MODERATOR: neutral, professional host (voice: "onyx")
-- POSITION_1: passionate advocate for their position (voice: "echo")
-- POSITION_2: passionate advocate for their position (voice: "fable")
+- MODERATOR: neutral, professional host (voice: "alloy")
+- POSITION_1: passionate advocate for their position (voice: "fable")
+- POSITION_2: passionate advocate for their position (voice: "nova")
 
 Style guidelines:
 - Each debater should speak passionately but respectfully
@@ -140,20 +141,25 @@ MODERATOR: "We've heard two thoroughly researched perspectives. The question rem
  */
 export async function generateDebateAudio(
   script: DebateScript,
-  moderatorVoice: string = 'onyx',
-  position1Voice: string = 'echo',
-  position2Voice: string = 'fable'
+  moderatorVoice?: string,
+  position1Voice?: string,
+  position2Voice?: string
 ): Promise<Buffer> {
   const audioSegments: Buffer[] = [];
 
+  // Use centralized voice configuration with smart defaults
+  const finalModeratorVoice = getVoiceOrDefault(moderatorVoice, VOICE_PRESETS.debate.moderator);
+  const finalPosition1Voice = getVoiceOrDefault(position1Voice, VOICE_PRESETS.debate.position1);
+  const finalPosition2Voice = getVoiceOrDefault(position2Voice, VOICE_PRESETS.debate.position2);
+
   try {
     // Generate intro audio (moderator)
-    console.log('Generating moderator intro audio...');
+    console.log(`Generating moderator intro audio with voice: ${finalModeratorVoice}...`);
     const introResponse = await openai.audio.speech.create({
       model: DEFAULT_TTS_MODEL,
-      voice: moderatorVoice as any,
+      voice: finalModeratorVoice as any,
       input: script.intro,
-      speed: 1.0,
+      speed: VOICE_PRESETS.debate.moderatorSpeed,
     });
     const introBuffer = Buffer.from(await introResponse.arrayBuffer());
     audioSegments.push(introBuffer);
@@ -169,20 +175,20 @@ export async function generateDebateAudio(
 
       switch (segment.speaker) {
         case 'MODERATOR':
-          voice = moderatorVoice;
-          speed = 1.0;
+          voice = finalModeratorVoice;
+          speed = VOICE_PRESETS.debate.moderatorSpeed;
           break;
         case 'POSITION_1':
-          voice = position1Voice;
-          speed = 0.98; // Slightly slower for emphasis
+          voice = finalPosition1Voice;
+          speed = VOICE_PRESETS.debate.debaterSpeed;
           break;
         case 'POSITION_2':
-          voice = position2Voice;
-          speed = 0.98; // Slightly slower for emphasis
+          voice = finalPosition2Voice;
+          speed = VOICE_PRESETS.debate.debaterSpeed;
           break;
         default:
-          voice = moderatorVoice;
-          speed = 1.0;
+          voice = finalModeratorVoice;
+          speed = VOICE_PRESETS.debate.moderatorSpeed;
       }
 
       const response = await openai.audio.speech.create({
@@ -204,9 +210,9 @@ export async function generateDebateAudio(
     console.log('Generating moderator outro audio...');
     const outroResponse = await openai.audio.speech.create({
       model: DEFAULT_TTS_MODEL,
-      voice: moderatorVoice as any,
+      voice: finalModeratorVoice as any,
       input: script.outro,
-      speed: 1.0,
+      speed: VOICE_PRESETS.debate.moderatorSpeed,
     });
     const outroBuffer = Buffer.from(await outroResponse.arrayBuffer());
     audioSegments.push(outroBuffer);

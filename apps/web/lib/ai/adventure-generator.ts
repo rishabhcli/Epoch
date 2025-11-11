@@ -4,6 +4,7 @@
  */
 
 import { openai, DEFAULT_MODEL, DEFAULT_TTS_MODEL } from './openai';
+import { VOICE_PRESETS, getVoiceOrDefault } from './voices';
 import {
   AdventureOutlineSchema,
   AdventureScriptSchema,
@@ -145,8 +146,11 @@ Create an immersive, historically accurate episode that makes the listener feel 
  */
 export async function generateNodeAudio(
   script: AdventureScript,
-  voice: string = 'nova'
+  narratorVoice?: string
 ): Promise<Buffer> {
+  // Use centralized voice configuration with smart defaults
+  const finalNarratorVoice = getVoiceOrDefault(narratorVoice, VOICE_PRESETS.adventure.narrator);
+
   try {
     const fullText = [
       script.intro,
@@ -157,13 +161,13 @@ export async function generateNodeAudio(
       .filter(Boolean)
       .join(' ');
 
-    console.log(`Generating audio for node ${script.nodeId} (${script.totalWords} words)...`);
+    console.log(`Generating audio for node ${script.nodeId} (${script.totalWords} words) with voice: ${finalNarratorVoice}...`);
 
     const response = await openai.audio.speech.create({
       model: DEFAULT_TTS_MODEL,
-      voice: voice as any,
+      voice: finalNarratorVoice as any,
       input: fullText,
-      speed: 1.0,
+      speed: VOICE_PRESETS.adventure.speed,
     });
 
     const buffer = Buffer.from(await response.arrayBuffer());
