@@ -9,6 +9,8 @@ import {
 import * as React from "react";
 import { EmailLayout } from "./components/layout";
 
+type EpisodeType = 'NARRATIVE' | 'INTERVIEW' | 'DEBATE' | 'ADVENTURE';
+
 interface DigestEpisode {
   id: string;
   title: string;
@@ -16,6 +18,7 @@ interface DigestEpisode {
   url: string;
   duration: number;
   publishedAt: Date;
+  type?: EpisodeType;
 }
 
 interface DigestEmailProps {
@@ -34,6 +37,7 @@ export default function DigestEmail({
       url: "https://epoch.fm/episodes/1",
       duration: 1200,
       publishedAt: new Date(),
+      type: "NARRATIVE" as EpisodeType,
     },
     {
       id: "2",
@@ -42,12 +46,31 @@ export default function DigestEmail({
       url: "https://epoch.fm/episodes/2",
       duration: 1380,
       publishedAt: new Date(),
+      type: "NARRATIVE" as EpisodeType,
     },
   ],
   periodLabel = "This Week",
 }: DigestEmailProps) {
   const totalDuration = episodes.reduce((sum, ep) => sum + ep.duration, 0);
   const totalMinutes = Math.round(totalDuration / 60);
+
+  const getFormatIcon = (type?: EpisodeType) => {
+    switch (type) {
+      case 'INTERVIEW': return '🎤';
+      case 'DEBATE': return '⚖️';
+      case 'ADVENTURE': return '🎮';
+      default: return '🎧';
+    }
+  };
+
+  const getFormatLabel = (type?: EpisodeType) => {
+    switch (type) {
+      case 'INTERVIEW': return 'Interview';
+      case 'DEBATE': return 'Debate';
+      case 'ADVENTURE': return 'Adventure';
+      default: return 'Podcast';
+    }
+  };
 
   return (
     <EmailLayout preview={`${episodes.length} new episodes ${periodLabel.toLowerCase()}`}>
@@ -70,6 +93,9 @@ export default function DigestEmail({
       {episodes.map((episode, index) => (
         <React.Fragment key={episode.id}>
           <Section style={episodeCard}>
+            <Text style={typeLabel}>
+              {getFormatIcon(episode.type)} {getFormatLabel(episode.type)}
+            </Text>
             <Heading as="h3" style={episodeTitle}>
               {episode.title}
             </Heading>
@@ -153,6 +179,15 @@ const episodeCard = {
   borderRadius: "8px",
   padding: "24px",
   marginBottom: "8px",
+};
+
+const typeLabel = {
+  fontSize: "12px",
+  fontWeight: "600",
+  color: "#666666",
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.5px",
+  margin: "0 0 12px",
 };
 
 const episodeTitle = {
