@@ -3,3 +3,4 @@ export * from "./outline-generator";
 export * from "./script-generator";
 export * from "./audio-generator";
 export * from "./interview-generator";
+export * from "./debate-generator";

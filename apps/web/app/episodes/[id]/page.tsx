@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/auth";
 import { AudioPlayer } from "@/components/audio/audio-player";
 import { InterviewPlayer } from "@/components/interview/interview-player";
+import { DebatePlayer } from "@/components/debate/debate-player";
 import { generatePodcastEpisodeJsonLd, generateBreadcrumbJsonLd } from "@/lib/utils/json-ld";
 
 interface EpisodePageProps {
@@ -19,6 +20,7 @@ export async function generateMetadata({
     where: { id },
     include: {
       interview: true,
+      debate: true,
     },
   });
 
@@ -59,6 +61,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
     where: { id },
     include: {
       interview: true,
+      debate: true,
     },
   });
 
@@ -184,7 +187,7 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
           )}
         </div>
 
-        {/* Audio player / Interview player */}
+        {/* Audio player / Interview player / Debate player */}
         {episode.type === 'INTERVIEW' && episode.interview && episode.audioUrl ? (
           <div className="mb-12">
             <InterviewPlayer
@@ -200,6 +203,25 @@ export default async function EpisodePage({ params }: EpisodePageProps) {
                   guestEra: episode.interview.guestEra,
                   topic: episode.interview.topic,
                   questions: episode.interview.questions as any[],
+                },
+              }}
+            />
+          </div>
+        ) : episode.type === 'DEBATE' && episode.debate && episode.audioUrl ? (
+          <div className="mb-12">
+            <DebatePlayer
+              episode={{
+                id: episode.id,
+                title: episode.title,
+                description: episode.description || '',
+                audioUrl: episode.audioUrl,
+                duration: episode.duration || undefined,
+                debate: {
+                  id: episode.debate.id,
+                  question: episode.debate.question,
+                  position1: episode.debate.position1,
+                  position2: episode.debate.position2,
+                  topic: episode.debate.topic,
                 },
               }}
             />

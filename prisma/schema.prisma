@@ -36,6 +36,7 @@ model User {
   sessions      Session[]
   episodes      Episode[]
   subscription  Subscription?
+  debateVotes   DebateVote[]
 
   @@index([email])
   @@index([feedToken])
@@ -132,6 +133,8 @@ model Episode {
 
   // Relations
   interview   Interview?
+  debate      Debate?
+  debateFollowUps DebateFollowUp[]
 
   // Timestamps
   createdAt   DateTime       @default(now())
@@ -195,6 +198,83 @@ model Interview {
 
   @@index([episodeId])
   @@index([guestName])
+}
+
+// ============================================================================
+// DEBATE MODELS
+// ============================================================================
+
+model Debate {
+  id          String   @id @default(cuid())
+  episodeId   String   @unique
+  episode     Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  // Debate details
+  topic       String
+  question    String   // "Was Napoleon a tyrant or a reformer?"
+  position1   String   // "Tyrant"
+  position2   String   // "Reformer"
+
+  // Arguments (stored as JSON)
+  argument1   Json     // Full argument for position 1
+  argument2   Json     // Full argument for position 2
+
+  // Relations
+  votes       DebateVote[]
+  followUps   DebateFollowUp[]
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([episodeId])
+  @@index([topic])
+}
+
+model DebateVote {
+  id          String   @id @default(cuid())
+  debateId    String
+  debate      Debate   @relation(fields: [debateId], references: [id], onDelete: Cascade)
+
+  // User (optional for anonymous voting)
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Vote details
+  position    Int      // 1 or 2
+  reasoning   String?  // Optional: why they chose this side
+
+  // Anonymous tracking
+  ipAddress   String?  // For anonymous voting
+  sessionId   String?  // Track anonymous users
+
+  // Timestamp
+  createdAt   DateTime @default(now())
+
+  @@unique([debateId, userId])
+  @@unique([debateId, sessionId])
+  @@index([debateId])
+  @@index([userId])
+}
+
+model DebateFollowUp {
+  id          String   @id @default(cuid())
+  debateId    String
+  debate      Debate   @relation(fields: [debateId], references: [id], onDelete: Cascade)
+
+  // Follow-up details
+  triggerPosition Int  // Follow-up for voters of position 1 or 2
+  episodeId   String
+  episode     Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  // Unlock criteria
+  unlockThreshold Int  @default(0) // Min votes needed to unlock
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+
+  @@index([debateId])
+  @@index([episodeId])
 }
 
 // ============================================================================
