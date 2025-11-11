@@ -37,6 +37,7 @@ model User {
   episodes      Episode[]
   subscription  Subscription?
   debateVotes   DebateVote[]
+  userJourneys  UserJourney[]
 
   @@index([email])
   @@index([feedToken])
@@ -135,6 +136,7 @@ model Episode {
   interview   Interview?
   debate      Debate?
   debateFollowUps DebateFollowUp[]
+  adventureNode AdventureNode?
 
   // Timestamps
   createdAt   DateTime       @default(now())
@@ -275,6 +277,131 @@ model DebateFollowUp {
 
   @@index([debateId])
   @@index([episodeId])
+}
+
+// ============================================================================
+// ADVENTURE MODELS
+// ============================================================================
+
+model Adventure {
+  id          String   @id @default(cuid())
+
+  // Basic info
+  title       String
+  description String   @db.Text
+  era         String?
+
+  // Start node reference
+  startNodeId String
+  startNode   AdventureNode @relation("StartNode", fields: [startNodeId], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  // Relations
+  nodes       AdventureNode[] @relation("AdventureNodes")
+  journeys    UserJourney[]
+
+  // Publishing
+  isPublished Boolean  @default(false)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished])
+}
+
+model AdventureNode {
+  id          String   @id @default(cuid())
+  adventureId String
+  adventure   Adventure @relation("AdventureNodes", fields: [adventureId], references: [id], onDelete: Cascade)
+
+  // Episode link
+  episodeId   String   @unique
+  episode     Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  // Node details
+  title       String
+  description String   @db.Text
+  nodeType    NodeType
+
+  // For decision nodes
+  decisionPrompt String?
+  choices     Choice[]
+
+  // For ending nodes
+  endingType  String?  // "victory", "defeat", "neutral", "bittersweet"
+
+  // Navigation (nodes that link TO this node)
+  parentChoices Choice[] @relation("ChoiceDestination")
+
+  // Start node references
+  startNodeFor Adventure[] @relation("StartNode")
+
+  // User journey tracking
+  currentJourneys UserJourney[] @relation("CurrentNode")
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+
+  @@index([adventureId])
+  @@index([nodeType])
+}
+
+enum NodeType {
+  START      // Beginning of adventure
+  DECISION   // User makes a choice
+  STORY      // Story continuation (no choice)
+  ENDING     // Terminal node
+}
+
+model Choice {
+  id          String   @id @default(cuid())
+  nodeId      String
+  node        AdventureNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  // Choice details
+  text        String   // "Support Caesar"
+  description String   @db.Text // Brief explanation of consequences
+
+  // Destination
+  nextNodeId  String
+  nextNode    AdventureNode @relation("ChoiceDestination", fields: [nextNodeId], references: [id], onDelete: Cascade)
+
+  // Preview
+  consequences String  @db.Text // What this choice leads to (for email preview)
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+
+  @@index([nodeId])
+  @@index([nextNodeId])
+}
+
+model UserJourney {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  adventureId String
+  adventure   Adventure @relation(fields: [adventureId], references: [id], onDelete: Cascade)
+
+  currentNodeId String
+  currentNode   AdventureNode @relation("CurrentNode", fields: [currentNodeId], references: [id])
+
+  // Path history (stored as JSON)
+  path        Json     @default("[]") // Array of {nodeId, choiceId, choiceText, timestamp}
+
+  // Completion tracking
+  isCompleted Boolean  @default(false)
+  completedAt DateTime?
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, adventureId])
+  @@index([userId])
+  @@index([adventureId])
+  @@index([currentNodeId])
 }
 
 // ============================================================================
