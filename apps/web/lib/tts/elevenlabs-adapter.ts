@@ -14,12 +14,14 @@ export class ElevenLabsTTSAdapter implements TTSAdapter {
   private baseUrl = "https://api.elevenlabs.io/v1";
 
   constructor(apiKey?: string) {
-    this.apiKey = apiKey || process.env.ELEVENLABS_API_KEY || "";
-    if (!this.apiKey) {
+    const key = apiKey || process.env.ELEVENLABS_API_KEY;
+    // Explicitly check for empty string and undefined/null
+    if (!key || key.trim() === "") {
       throw new Error(
         "ElevenLabs API key is required. Set ELEVENLABS_API_KEY environment variable."
       );
     }
+    this.apiKey = key.trim();
   }
 
   async generateAudio(
@@ -90,6 +92,13 @@ export class ElevenLabsTTSAdapter implements TTSAdapter {
       }
 
       const data = await response.json();
+
+      // Validate response structure
+      if (!data || !Array.isArray(data.voices)) {
+        console.error("Invalid voices API response format");
+        return [];
+      }
+
       return data.voices.map((v: any) => ({
         id: v.voice_id,
         name: v.name,

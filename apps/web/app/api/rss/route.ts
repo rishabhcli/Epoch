@@ -8,24 +8,25 @@ import { buildRSSFeed } from "@/lib/podcast";
  */
 export async function GET(request: NextRequest) {
   try {
-    // Get or create the default show metadata
-    let show = await prisma.show.findFirst();
+    // Get or create the default show metadata (using upsert to prevent race conditions)
+    // We use a fixed ID to ensure only one show record exists
+    const SHOW_ID = "default-show";
 
-    if (!show) {
-      // Create default show if none exists
-      show = await prisma.show.create({
-        data: {
-          title: process.env.NEXT_PUBLIC_SITE_NAME || "Epoch Pod",
-          description:
-            "Personalized history podcasts delivered to your inbox. Explore any era, topic, or moment in time with AI-generated episodes.",
-          ownerName: "Epoch Pod",
-          ownerEmail: process.env.RESEND_FROM_EMAIL || "noreply@epoch.fm",
-          language: "en-us",
-          category: "History",
-          explicit: false,
-        },
-      });
-    }
+    const show = await prisma.show.upsert({
+      where: { id: SHOW_ID },
+      update: {}, // Don't update if it exists
+      create: {
+        id: SHOW_ID,
+        title: process.env.NEXT_PUBLIC_SITE_NAME || "Epoch Pod",
+        description:
+          "Personalized history podcasts delivered to your inbox. Explore any era, topic, or moment in time with AI-generated episodes.",
+        ownerName: "Epoch Pod",
+        ownerEmail: process.env.RESEND_FROM_EMAIL || "noreply@epoch.fm",
+        language: "en-us",
+        category: "History",
+        explicit: false,
+      },
+    });
 
     // Get all published public episodes (userId is null)
     const episodes = await prisma.episode.findMany({

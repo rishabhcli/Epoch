@@ -75,6 +75,13 @@ export async function POST(
       return NextResponse.json({ error: 'Choice not found' }, { status: 404 });
     }
 
+    if (!choice.nextNode) {
+      return NextResponse.json(
+        { error: 'Invalid choice: next node not found' },
+        { status: 500 }
+      );
+    }
+
     if (choice.nodeId !== journey.currentNodeId) {
       return NextResponse.json(
         { error: 'Invalid choice for current node' },
@@ -84,7 +91,7 @@ export async function POST(
 
     // Update journey with new node and path
     const updatedPath = [
-      ...(journey.path as any[]),
+      ...(Array.isArray(journey.path) ? journey.path : []),
       {
         nodeId: journey.currentNodeId,
         choiceId: choice.id,

@@ -39,23 +39,25 @@ export async function GET(
       });
     }
 
-    // Get or create show metadata
-    let show = await prisma.show.findFirst();
+    // Get or create show metadata (using upsert to prevent race conditions)
+    // We use a fixed ID to ensure only one show record exists
+    const SHOW_ID = "default-show";
 
-    if (!show) {
-      show = await prisma.show.create({
-        data: {
-          title: `${process.env.NEXT_PUBLIC_SITE_NAME || "Epoch Pod"} - ${user.name || user.email}`,
-          description:
-            "Your personalized history podcast feed. Episodes tailored to your interests.",
-          ownerName: "Epoch Pod",
-          ownerEmail: process.env.RESEND_FROM_EMAIL || "noreply@epoch.fm",
-          language: "en-us",
-          category: "History",
-          explicit: false,
-        },
-      });
-    }
+    const show = await prisma.show.upsert({
+      where: { id: SHOW_ID },
+      update: {}, // Don't update if it exists
+      create: {
+        id: SHOW_ID,
+        title: process.env.NEXT_PUBLIC_SITE_NAME || "Epoch Pod",
+        description:
+          "Your personalized history podcast feed. Episodes tailored to your interests.",
+        ownerName: "Epoch Pod",
+        ownerEmail: process.env.RESEND_FROM_EMAIL || "noreply@epoch.fm",
+        language: "en-us",
+        category: "History",
+        explicit: false,
+      },
+    });
 
     // Get user's episodes
     const episodes = await prisma.episode.findMany({

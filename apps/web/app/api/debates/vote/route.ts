@@ -9,6 +9,33 @@ const VoteRequestSchema = z.object({
   reasoning: z.string().max(1000).optional(),
 });
 
+/**
+ * Safely extract client IP address from request
+ * Prevents header spoofing by validating IP format
+ */
+function getClientIp(req: NextRequest): string | undefined {
+  // In production (behind proxy), use x-forwarded-for
+  // Format: "client, proxy1, proxy2"
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    // Take only the first (client) IP and validate it
+    const clientIp = forwarded.split(',')[0].trim();
+    // Basic IP validation (IPv4 or IPv6)
+    if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(clientIp) || /^[0-9a-f:]+$/i.test(clientIp)) {
+      return clientIp;
+    }
+  }
+
+  // Fallback to other headers (less reliable)
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) {
+    return realIp.trim();
+  }
+
+  // In development or direct connection, use req.ip
+  return req.ip || undefined;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
@@ -34,11 +61,27 @@ export async function POST(req: NextRequest) {
     }
 
     // For anonymous users, use session ID from cookies or create one
-    const sessionId = req.cookies.get('debate_session')?.value || undefined;
-    const ipAddress = req.headers.get('x-forwarded-for') || undefined;
+    let sessionId = req.cookies.get('debate_session')?.value;
+    const ipAddress = getClientIp(req);
+
+    // Generate a session ID for anonymous users if they don't have one
+    if (!session?.user?.id && !sessionId) {
+      // Generate a cryptographically secure session ID
+      sessionId = crypto.randomUUID();
+    }
+
+    // Ensure we always have either userId or sessionId (never both null)
+    if (!session?.user?.id && !sessionId) {
+      return NextResponse.json(
+        { error: 'Unable to track vote. Please enable cookies.' },
+        { status: 400 }
+      );
+    }
 
     // Create or update vote
     let vote;
+    let response;
+
     if (session?.user?.id) {
       // Authenticated user
       vote = await prisma.debateVote.upsert({
@@ -82,8 +125,9 @@ export async function POST(req: NextRequest) {
         },
       });
     } else {
+      // This should never happen due to check above, but TypeScript needs it
       return NextResponse.json(
-        { error: 'Unable to track vote. Please enable cookies.' },
+        { error: 'Unable to track vote' },
         { status: 400 }
       );
     }
@@ -102,7 +146,7 @@ export async function POST(req: NextRequest) {
       include: { episode: true },
     });
 
-    return NextResponse.json({
+    const responseData = {
       success: true,
       vote: {
         position: vote.position,
@@ -114,7 +158,21 @@ export async function POST(req: NextRequest) {
         description: f.episode.description,
       })),
       message: followUps.length > 0 ? 'Vote recorded and new episodes unlocked!' : 'Vote recorded successfully',
-    });
+    };
+
+    const jsonResponse = NextResponse.json(responseData);
+
+    // Set session cookie for anonymous users
+    if (!session?.user?.id && sessionId) {
+      jsonResponse.cookies.set('debate_session', sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 365, // 1 year
+      });
+    }
+
+    return jsonResponse;
   } catch (error) {
     console.error('Vote API error:', error);
 

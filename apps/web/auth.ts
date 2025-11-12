@@ -5,6 +5,11 @@ import { authConfig } from "./auth.config";
 import { prisma } from "@/lib/db";
 import type { Adapter } from "next-auth/adapters";
 
+// Validate Resend API key
+if (!process.env.RESEND_API_KEY) {
+  console.warn("WARNING: RESEND_API_KEY is not set. Email authentication will fail.");
+}
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
