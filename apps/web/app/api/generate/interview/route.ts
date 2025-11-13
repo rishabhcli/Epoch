@@ -9,6 +9,7 @@ import {
 } from '@/lib/ai/interview-generator';
 import { uploadAudio } from '@/lib/storage';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
 const GenerateInterviewRequestSchema = z.object({
   guestName: z.string().min(1).max(200),
@@ -85,6 +86,11 @@ export async function POST(request: NextRequest) {
       `${script.outro.speaker}: ${script.outro.text}`,
     ].join('\n\n');
 
+    // Validate bytes before converting to BigInt
+    if (typeof uploadResult.bytes !== 'number' || !Number.isInteger(uploadResult.bytes) || uploadResult.bytes < 0) {
+      throw new Error(`Invalid audio bytes value: ${uploadResult.bytes}`);
+    }
+
     const episode = await prisma.episode.create({
       data: {
         title: `Interview with ${outline.guest.name}: ${outline.topic}`,
@@ -100,7 +106,7 @@ export async function POST(request: NextRequest) {
         publishedAt: new Date(),
         type: 'INTERVIEW',
         userId: session.user.id,
-        sources: outline.sources,
+        sources: outline.sources as Prisma.InputJsonValue,
         keywords: [
           outline.guest.name,
           outline.guest.role,
@@ -116,8 +122,8 @@ export async function POST(request: NextRequest) {
             guestEra: outline.guest.era,
             guestVoice,
             topic: outline.topic,
-            questions: outline.questions,
-            dialogue: script.segments,
+            questions: outline.questions as Prisma.InputJsonValue,
+            dialogue: script.segments as Prisma.InputJsonValue,
           },
         },
       },

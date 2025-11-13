@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { createHmac, timingSafeEqual } from "crypto";
+import { Prisma } from "@prisma/client";
 
 /**
  * Resend webhook handler
@@ -9,13 +11,16 @@ import { prisma } from "@/lib/db";
  */
 export async function POST(request: NextRequest) {
   try {
-    // Verify webhook signature (recommended for production)
-    // const signature = request.headers.get("resend-signature");
-    // if (!verifySignature(signature, body)) {
-    //   return new NextResponse("Invalid signature", { status: 401 });
-    // }
+    const rawBody = await request.text();
+    const body = JSON.parse(rawBody);
 
-    const body = await request.json();
+    // Verify webhook signature (production security)
+    const signature = request.headers.get("svix-signature");
+    if (!verifySignature(signature, rawBody)) {
+      console.error("Invalid webhook signature");
+      return new NextResponse("Unauthorized", { status: 401 });
+    }
+
     const { type, data } = body;
 
     if (!type || !data) {
@@ -24,7 +29,15 @@ export async function POST(request: NextRequest) {
 
     const { email_id, to, created_at, subject } = data;
 
-    console.log(`Received webhook: ${type} for ${to}`);
+    // Safely extract email address (Resend may send array or string)
+    const emailAddress = Array.isArray(to) ? to[0] : to;
+
+    if (!emailAddress || typeof emailAddress !== 'string') {
+      console.error(`Invalid email address in webhook: ${to}`);
+      return new NextResponse("Invalid email address", { status: 400 });
+    }
+
+    console.log(`Received webhook: ${type} for ${emailAddress}`);
 
     // Map Resend event types to our EmailEventType enum
     const eventTypeMap: Record<string, string> = {
@@ -47,8 +60,8 @@ export async function POST(request: NextRequest) {
     await prisma.emailEvent.create({
       data: {
         messageId: email_id,
-        email: to[0] || to, // Resend may send array or string
-        type: eventType as any,
+        email: emailAddress,
+        type: eventType as Prisma.EmailEventType,
         data: {
           subject,
           created_at,
@@ -63,7 +76,7 @@ export async function POST(request: NextRequest) {
       const subscription = await prisma.subscription.findFirst({
         where: {
           user: {
-            email: to[0] || to,
+            email: emailAddress,
           },
         },
       });
@@ -83,7 +96,7 @@ export async function POST(request: NextRequest) {
           });
 
           console.log(
-            `Auto-unsubscribed ${to[0] || to} due to ${type === "email.complained" ? "complaint" : "hard bounce"}`
+            `Auto-unsubscribed ${emailAddress} due to ${type === "email.complained" ? "complaint" : "hard bounce"}`
           );
         }
 
@@ -96,7 +109,7 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          console.log(`Paused subscription for ${to[0] || to} due to soft bounce`);
+          console.log(`Paused subscription for ${emailAddress} due to soft bounce`);
         }
       }
     }
@@ -112,18 +125,66 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Verify Resend webhook signature
- * Implementation depends on Resend's signing method
+ * Verify Resend webhook signature using Svix format
+ * Resend uses Svix for webhook signatures
+ * Format: "v1,<timestamp>,<signature>"
  */
 function verifySignature(signature: string | null, body: string): boolean {
-  // TODO: Implement signature verification
-  // This is a placeholder - check Resend's documentation for the actual implementation
-  if (!signature) return false;
+  // Allow bypassing signature verification in development only
+  if (process.env.NODE_ENV === "development" && !process.env.RESEND_WEBHOOK_SECRET) {
+    console.warn("WARNING: Webhook signature verification disabled in development");
+    return true;
+  }
 
-  // Resend typically uses HMAC-SHA256
-  // const secret = process.env.RESEND_WEBHOOK_SECRET;
-  // const expectedSignature = createHmac('sha256', secret).update(body).digest('hex');
-  // return timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  if (!signature) {
+    console.error("Missing webhook signature");
+    return false;
+  }
 
-  return true; // For development
+  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error("RESEND_WEBHOOK_SECRET not configured");
+    return false;
+  }
+
+  try {
+    // Parse Svix signature format: "v1,timestamp,signature"
+    const parts = signature.split(",");
+    if (parts.length < 3) {
+      console.error("Invalid signature format");
+      return false;
+    }
+
+    const timestamp = parts[1];
+    const receivedSignature = parts[2];
+
+    // Verify timestamp is recent (within 5 minutes)
+    const timestampMs = parseInt(timestamp, 10);
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+
+    if (Math.abs(now - timestampMs) > fiveMinutes) {
+      console.error("Webhook timestamp too old or in future");
+      return false;
+    }
+
+    // Compute expected signature
+    const signedPayload = `${timestamp}.${body}`;
+    const expectedSignature = createHmac("sha256", secret)
+      .update(signedPayload)
+      .digest("base64");
+
+    // Constant-time comparison to prevent timing attacks
+    if (expectedSignature.length !== receivedSignature.length) {
+      return false;
+    }
+
+    return timingSafeEqual(
+      Buffer.from(expectedSignature),
+      Buffer.from(receivedSignature)
+    );
+  } catch (error) {
+    console.error("Signature verification error:", error);
+    return false;
+  }
 }

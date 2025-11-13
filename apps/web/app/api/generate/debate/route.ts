@@ -9,6 +9,7 @@ import {
 } from '@/lib/ai/debate-generator';
 import { uploadAudio } from '@/lib/storage';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
 const GenerateDebateRequestSchema = z.object({
   topic: z.string().min(1).max(500),
@@ -96,6 +97,11 @@ export async function POST(request: NextRequest) {
       `MODERATOR: ${script.outro}`,
     ].join('\n\n');
 
+    // Validate bytes before converting to BigInt
+    if (typeof uploadResult.bytes !== 'number' || !Number.isInteger(uploadResult.bytes) || uploadResult.bytes < 0) {
+      throw new Error(`Invalid audio bytes value: ${uploadResult.bytes}`);
+    }
+
     const episode = await prisma.episode.create({
       data: {
         title: `Debate: ${question}`,
@@ -110,7 +116,7 @@ export async function POST(request: NextRequest) {
         publishedAt: new Date(),
         type: 'DEBATE',
         userId: session.user.id,
-        sources: [], // Sources are embedded in arguments
+        sources: [] as Prisma.InputJsonValue,
         keywords: [topic, outline.position1, outline.position2, 'debate'],
         debate: {
           create: {
@@ -118,8 +124,8 @@ export async function POST(request: NextRequest) {
             question: outline.question,
             position1: outline.position1,
             position2: outline.position2,
-            argument1: outline.argument1,
-            argument2: outline.argument2,
+            argument1: outline.argument1 as Prisma.InputJsonValue,
+            argument2: outline.argument2 as Prisma.InputJsonValue,
           },
         },
       },

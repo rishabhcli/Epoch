@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { UserPreferencesSchema } from "@epoch/schema";
+import { Prisma } from "@prisma/client";
 
 export async function PUT(request: NextRequest) {
   try {
@@ -22,11 +23,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Update user preferences
+    // Update user preferences - validation.data is already validated by Zod
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
-        preferences: validation.data as any, // Store as JSON
+        preferences: validation.data as Prisma.InputJsonValue,
       },
     });
 

@@ -5,6 +5,7 @@ import { generateAudio } from "./audio-generator";
 import { uploadAudio } from "../storage";
 import type { VoiceConfig } from "@epoch/schema";
 import { nanoid } from "nanoid";
+import { Prisma } from "@prisma/client";
 
 export interface EpisodeGenerationParams {
   topic: string;
@@ -88,7 +89,7 @@ export async function generateEpisode(
       data: {
         title: outline.title,
         subtitle: outline.subtitle,
-        outline: outline as any, // JSON
+        outline: outline as Prisma.InputJsonValue,
       },
     });
 
@@ -109,9 +110,9 @@ export async function generateEpisode(
     await prisma.episode.update({
       where: { id: episode.id },
       data: {
-        script: script as any, // JSON
+        script: script as Prisma.InputJsonValue,
         transcript: script.transcript,
-        sources: script.allCitations as any, // JSON
+        sources: script.allCitations as Prisma.InputJsonValue,
       },
     });
 
@@ -155,6 +156,11 @@ export async function generateEpisode(
     });
 
     // Step 5: Update episode with final data
+    // Validate bytes before converting to BigInt
+    if (typeof uploadResult.bytes !== 'number' || !Number.isInteger(uploadResult.bytes) || uploadResult.bytes < 0) {
+      throw new Error(`Invalid audio bytes value: ${uploadResult.bytes}`);
+    }
+
     const updatedEpisode = await prisma.episode.update({
       where: { id: episode.id },
       data: {
