@@ -3,11 +3,25 @@
  * Handles rate limiting and transient errors
  */
 
+/**
+ * API Error interface covering common error formats
+ */
+export interface APIError extends Error {
+  status?: number;
+  code?: string;
+  type?: string;
+  error?: {
+    message?: string;
+    type?: string;
+    code?: string;
+  };
+}
+
 export interface RetryOptions {
   maxRetries?: number;
   initialDelay?: number;
   maxDelay?: number;
-  shouldRetry?: (error: any) => boolean;
+  shouldRetry?: (error: APIError) => boolean;
 }
 
 /**
@@ -37,13 +51,13 @@ export async function retryWithBackoff<T>(
     shouldRetry = defaultShouldRetry,
   } = options;
 
-  let lastError: any;
+  let lastError: APIError | undefined;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
-    } catch (error: any) {
-      lastError = error;
+    } catch (error) {
+      lastError = error as APIError;
 
       // Don't retry if it's the last attempt
       if (attempt === maxRetries) {
@@ -78,7 +92,7 @@ export async function retryWithBackoff<T>(
 /**
  * Default retry logic - retries on rate limits and server errors
  */
-function defaultShouldRetry(error: any): boolean {
+function defaultShouldRetry(error: APIError): boolean {
   // Retry on rate limit errors
   if (error.status === 429 || error.code === 'rate_limit_exceeded') {
     return true;
@@ -111,10 +125,15 @@ function defaultShouldRetry(error: any): boolean {
 /**
  * Extract error message from various error formats
  */
-function getErrorMessage(error: any): string {
-  if (error.message) return error.message;
-  if (error.error?.message) return error.error.message;
+function getErrorMessage(error: APIError | unknown): string {
+  if (!error) return 'Unknown error';
   if (typeof error === 'string') return error;
+
+  // Check if it's an APIError
+  const apiError = error as APIError;
+  if (apiError.message) return apiError.message;
+  if (apiError.error?.message) return apiError.error.message;
+
   return 'Unknown error';
 }
 

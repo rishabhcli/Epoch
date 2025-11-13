@@ -34,19 +34,12 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Find user by email or token (you'd need to store the token properly)
-    // For now, we'll look up by the token in email events
-    const emailEvent = await prisma.emailEvent.findFirst({
-      where: {
-        data: {
-          path: ["unsubscribeToken"],
-          equals: token,
-        },
-      },
-      orderBy: { createdAt: "desc" },
+    // Find unsubscribe token
+    const unsubscribeToken = await prisma.unsubscribeToken.findUnique({
+      where: { token },
     });
 
-    if (!emailEvent) {
+    if (!unsubscribeToken) {
       return new NextResponse(
         `
         <!DOCTYPE html>
@@ -60,7 +53,7 @@ export async function GET(request: NextRequest) {
           </head>
           <body>
             <h1 class="error">Link not found</h1>
-            <p>We couldn't find this unsubscribe link. It may have already been used.</p>
+            <p>We couldn't find this unsubscribe link. It may have expired or been used already.</p>
           </body>
         </html>
       `,
@@ -71,33 +64,88 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Check if token has expired
+    if (new Date() > unsubscribeToken.expiresAt) {
+      return new NextResponse(
+        `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Expired Unsubscribe Link</title>
+            <style>
+              body { font-family: system-ui; max-width: 600px; margin: 50px auto; padding: 20px; }
+              .error { color: #dc2626; }
+            </style>
+          </head>
+          <body>
+            <h1 class="error">Link expired</h1>
+            <p>This unsubscribe link has expired. Please use a more recent email or contact support.</p>
+          </body>
+        </html>
+      `,
+        {
+          status: 410,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        }
+      );
+    }
+
+    // Check if token has already been used
+    if (unsubscribeToken.usedAt) {
+      return new NextResponse(
+        `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Already Unsubscribed</title>
+            <style>
+              body { font-family: system-ui; max-width: 600px; margin: 50px auto; padding: 20px; }
+              .success { color: #16a34a; }
+            </style>
+          </head>
+          <body>
+            <h1 class="success">Already unsubscribed</h1>
+            <p>You have already been unsubscribed using this link.</p>
+          </body>
+        </html>
+      `,
+        {
+          status: 200,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        }
+      );
+    }
+
     // Find and update subscription
     const subscription = await prisma.subscription.findFirst({
-      where: {
-        user: {
-          email: emailEvent.email,
-        },
-      },
+      where: { userId: unsubscribeToken.userId },
       include: { user: true },
     });
 
     if (subscription) {
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: {
-          status: "UNSUBSCRIBED",
-          unsubscribedAt: new Date(),
-        },
-      });
-
-      // Log the event
-      await prisma.emailEvent.create({
-        data: {
-          messageId: emailEvent.messageId,
-          email: emailEvent.email,
-          type: "UNSUBSCRIBED",
-        },
-      });
+      // Use transaction to update both subscription and token atomically
+      await prisma.$transaction([
+        prisma.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: "UNSUBSCRIBED",
+            unsubscribedAt: new Date(),
+          },
+        }),
+        prisma.unsubscribeToken.update({
+          where: { token },
+          data: {
+            usedAt: new Date(),
+          },
+        }),
+        prisma.emailEvent.create({
+          data: {
+            messageId: "unsubscribe",
+            email: unsubscribeToken.email,
+            type: "UNSUBSCRIBED",
+          },
+        }),
+      ]);
     }
 
     return new NextResponse(
