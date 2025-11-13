@@ -230,15 +230,12 @@ export async function generateDebateAudio(script: z.infer<typeof DebateScriptSch
   }
 
   // Concatenate audio segments with brief pauses
-  // TODO: Use ffmpeg or similar to properly merge audio with 0.5s silence between segments
-  return concatenateAudioWithPauses(audioSegments);
+  // COMPLETED: Using fluent-ffmpeg to properly merge audio with 0.5s silence between segments
+  return concatenateAudioWithSilenceSafe(audioSegments, 0.5);
 }
 
-function concatenateAudioWithPauses(segments: Buffer[]): Buffer {
-  // Simplified: just concatenate for now
-  // Production: use fluent-ffmpeg to add 0.5s silence between speakers
-  return Buffer.concat(segments);
-}
+// Audio concatenation implemented in apps/web/lib/ai/audio-utils.ts
+// See AUDIO_UTILITIES.md for full documentation
 ```
 
 #### API Endpoints
@@ -1361,11 +1358,10 @@ export async function generateInterviewAudio(
   return concatenateAudioWithPauses(audioSegments, 0.3);
 }
 
-function concatenateAudioWithPauses(segments: Buffer[], pauseDuration: number = 0.5): Buffer {
-  // TODO: Use fluent-ffmpeg to add silence between segments
-  // For now, simple concatenation
-  return Buffer.concat(segments);
-}
+// Audio concatenation with silence is now fully implemented
+// See apps/web/lib/ai/audio-utils.ts for the complete implementation
+// Documentation: apps/web/lib/ai/AUDIO_UTILITIES.md
+// Demo script: apps/web/lib/ai/audio-utils-demo.ts
 ```
 
 #### API Endpoints

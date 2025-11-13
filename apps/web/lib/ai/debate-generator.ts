@@ -13,6 +13,7 @@ import {
   type DebateScript,
 } from '@epoch/schema';
 import zodToJsonSchema from 'zod-to-json-schema';
+import { concatenateAudioWithSilenceSafe } from './audio-utils';
 
 /**
  * Generate a debate outline with two balanced positions
@@ -218,10 +219,9 @@ export async function generateDebateAudio(
     const outroBuffer = Buffer.from(await outroResponse.arrayBuffer());
     audioSegments.push(outroBuffer);
 
-    console.log('Concatenating debate audio segments...');
-    // For now, simple concatenation
-    // TODO: Use ffmpeg to add 0.5s silence between speakers for natural pacing
-    return Buffer.concat(audioSegments);
+    console.log('Concatenating debate audio segments with 0.5s pauses...');
+    // Use ffmpeg to add 0.5s silence between speakers for natural pacing
+    return await concatenateAudioWithSilenceSafe(audioSegments, 0.5);
   } catch (error) {
     console.error('Error generating debate audio:', error);
     throw new Error('Failed to generate debate audio');
