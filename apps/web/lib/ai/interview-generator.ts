@@ -13,6 +13,7 @@ import {
   type InterviewScript,
 } from '@epoch/schema';
 import zodToJsonSchema from 'zod-to-json-schema';
+import { concatenateAudioWithSilenceSafe } from './audio-utils';
 
 /**
  * Generate an interview outline with research and questions
@@ -212,12 +213,11 @@ export async function generateInterviewAudio(
     const outroBuffer = Buffer.from(await outroResponse.arrayBuffer());
     audioSegments.push(outroBuffer);
 
-    console.log('Concatenating audio segments...');
+    console.log('Concatenating audio segments with 0.3s pauses...');
     console.log(`Total segments: ${audioSegments.length}`);
 
-    // For now, simple concatenation
-    // TODO: Use ffmpeg to add 0.3s silence between speakers for more natural pacing
-    return Buffer.concat(audioSegments);
+    // Use ffmpeg to add 0.3s silence between speakers for more natural pacing
+    return await concatenateAudioWithSilenceSafe(audioSegments, 0.3);
   } catch (error) {
     console.error('Error generating interview audio:', error);
     if (error instanceof Error) {
