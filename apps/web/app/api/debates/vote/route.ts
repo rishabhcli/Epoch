@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/auth';
 import { z } from 'zod';
+import {
+  interactionRateLimit,
+  getClientIdentifier,
+  getUserIdentifier,
+  withRateLimit,
+  rateLimitResponse
+} from '@/lib/rate-limit';
 
 const VoteRequestSchema = z.object({
   debateId: z.string(),
@@ -9,36 +16,21 @@ const VoteRequestSchema = z.object({
   reasoning: z.string().max(1000).optional(),
 });
 
-/**
- * Safely extract client IP address from request
- * Prevents header spoofing by validating IP format
- */
-function getClientIp(req: NextRequest): string | undefined {
-  // In production (behind proxy), use x-forwarded-for
-  // Format: "client, proxy1, proxy2"
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) {
-    // Take only the first (client) IP and validate it
-    const clientIp = forwarded.split(',')[0].trim();
-    // Basic IP validation (IPv4 or IPv6)
-    if (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(clientIp) || /^[0-9a-f:]+$/i.test(clientIp)) {
-      return clientIp;
-    }
-  }
-
-  // Fallback to other headers (less reliable)
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp) {
-    return realIp.trim();
-  }
-
-  // In development or direct connection, use req.ip
-  return req.ip || undefined;
-}
-
 export async function POST(req: NextRequest) {
+  // Apply rate limiting (20 requests per minute)
+  const session = await auth();
+  const identifier = getUserIdentifier(req, session?.user?.id);
+  const rateLimit = await withRateLimit(req, interactionRateLimit, {
+    identifier,
+    fallbackLimit: 20,
+    fallbackWindow: 60000, // 1 minute
+  });
+
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit.headers);
+  }
+
   try {
-    const session = await auth();
     const body = await req.json();
 
     const validation = VoteRequestSchema.safeParse(body);
@@ -62,7 +54,7 @@ export async function POST(req: NextRequest) {
 
     // For anonymous users, use session ID from cookies or create one
     let sessionId = req.cookies.get('debate_session')?.value;
-    const ipAddress = getClientIp(req);
+    const ipAddress = getClientIdentifier(req);
 
     // Generate a session ID for anonymous users if they don't have one
     if (!session?.user?.id && !sessionId) {
@@ -161,6 +153,11 @@ export async function POST(req: NextRequest) {
     };
 
     const jsonResponse = NextResponse.json(responseData);
+
+    // Add rate limit headers
+    Object.entries(rateLimit.headers).forEach(([key, value]) => {
+      jsonResponse.headers.set(key, value);
+    });
 
     // Set session cookie for anonymous users
     if (!session?.user?.id && sessionId) {

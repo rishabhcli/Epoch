@@ -32,11 +32,16 @@ export async function sendEmail(options: SendEmailOptions) {
 
   // Store unsubscribe token if userId is provided
   if (userId) {
-    await prisma.user.update({
-      where: { id: userId },
+    // Create unsubscribe token with 30-day expiration
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    await prisma.unsubscribeToken.create({
       data: {
-        // Store token in a JSON field or create a separate UnsubscribeToken model
-        // For now, we'll use the user record
+        token: unsubscribeToken,
+        userId,
+        email: to,
+        expiresAt,
       },
     });
   }

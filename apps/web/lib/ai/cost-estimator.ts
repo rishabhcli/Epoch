@@ -52,7 +52,6 @@ export function estimateNarrativeCost(): GenerationCostEstimate {
     gpt4Tokens,
     gpt4Cost,
     ttsCharacters,
-    ttsCharacters,
     ttsCost,
     totalCost: gpt4Cost + ttsCost,
     estimatedDuration: 600, // ~10 minutes

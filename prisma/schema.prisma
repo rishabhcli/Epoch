@@ -506,3 +506,27 @@ enum EmailEventType {
   COMPLAINED
   UNSUBSCRIBED
 }
+
+// ============================================================================
+// UNSUBSCRIBE TOKEN MODEL
+// ============================================================================
+
+model UnsubscribeToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  email     String
+
+  // Token expiration (30 days default)
+  expiresAt DateTime
+
+  // Usage tracking
+  usedAt    DateTime?
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+  @@index([expiresAt])
+}

@@ -10,6 +10,8 @@ import {
   AdventureScriptSchema,
   type AdventureOutline,
   type AdventureScript,
+  type AdventureNode,
+  type Choice,
 } from '@epoch/schema';
 import zodToJsonSchema from 'zod-to-json-schema';
 
@@ -77,12 +79,32 @@ Design a complete adventure outline with branching paths that allow the listener
 }
 
 /**
+ * Path history entry
+ */
+interface PathHistoryEntry {
+  nodeId: string;
+  choiceId?: string;
+  choiceText?: string;
+  timestamp: string;
+}
+
+/**
+ * Adventure context for node generation
+ */
+interface AdventureContext {
+  title: string;
+  description: string;
+  historicalContext: string;
+  era?: string;
+}
+
+/**
  * Generate script for a single node with context awareness
  */
 export async function generateNodeScript(
-  node: any,
-  adventureContext: any,
-  pathHistory?: any[]
+  node: AdventureNode,
+  adventureContext: AdventureContext,
+  pathHistory?: PathHistoryEntry[]
 ): Promise<AdventureScript> {
   const jsonSchema = zodToJsonSchema(AdventureScriptSchema, 'nodeScript');
 

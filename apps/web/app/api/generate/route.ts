@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { generateEpisode } from "@/lib/ai/episode-generator";
 import { z } from "zod";
 import { VoiceConfigSchema } from "@epoch/schema";
+import { aiGenerationRateLimit, getUserIdentifier, withRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 const GenerateRequestSchema = z.object({
   topic: z.string().min(1).max(500),
@@ -13,9 +14,20 @@ const GenerateRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  try {
-    const session = await auth();
+  // Apply rate limiting (10 requests per hour per user)
+  const session = await auth();
+  const identifier = getUserIdentifier(request, session?.user?.id);
+  const rateLimit = await withRateLimit(request, aiGenerationRateLimit, {
+    identifier,
+    fallbackLimit: 10,
+    fallbackWindow: 3600000, // 1 hour
+  });
 
+  if (!rateLimit.success) {
+    return rateLimitResponse(rateLimit.headers);
+  }
+
+  try {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -43,11 +55,18 @@ export async function POST(request: NextRequest) {
       additionalContext,
     });
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       episodeId: episode.id,
       message: "Episode generation completed successfully",
     });
+
+    // Add rate limit headers
+    Object.entries(rateLimit.headers).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+
+    return response;
   } catch (error) {
     console.error("Generation API error:", error);
 
