@@ -5,6 +5,8 @@
  * and more descriptive error messages throughout the application.
  */
 
+import { captureException, isErrorTrackingEnabled } from './error-tracking';
+
 /**
  * Base application error
  * All custom errors extend this class
@@ -337,9 +339,13 @@ export function logError(error: Error | AppError, context?: Record<string, any>)
     }),
   };
 
-  // In production, this should be sent to a logging service (Sentry, LogRocket, etc.)
+  // In production, send to error tracking service (Sentry, LogRocket, etc.)
   if (process.env.NODE_ENV === 'production') {
-    // TODO: Send to error tracking service
+    // Send to error tracking service if configured
+    if (isErrorTrackingEnabled()) {
+      captureException(error, context);
+    }
+    // Also log to console for server logs
     console.error('[ERROR]', JSON.stringify(errorInfo, null, 2));
   } else {
     // Development: Pretty print
