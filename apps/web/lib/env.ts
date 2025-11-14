@@ -36,6 +36,9 @@ const serverEnvSchema = z.object({
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
 
+  // Error Tracking (optional)
+  SENTRY_DSN: z.string().url("SENTRY_DSN must be a valid URL").optional(),
+
   // Node Environment
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
@@ -75,6 +78,7 @@ function validateEnv() {
         GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
         GITHUB_CLIENT_ID: process.env.GITHUB_CLIENT_ID,
         GITHUB_CLIENT_SECRET: process.env.GITHUB_CLIENT_SECRET,
+        SENTRY_DSN: process.env.SENTRY_DSN,
         NODE_ENV: process.env.NODE_ENV,
       },
       client: {

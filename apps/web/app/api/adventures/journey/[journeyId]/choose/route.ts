@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { auth } from '@/auth';
 import { z } from 'zod';
+import { sendEpisodeNotification } from '@/lib/email/service';
 
 const ChoiceRequestSchema = z.object({
   choiceId: z.string(),
@@ -120,7 +121,19 @@ export async function POST(
       },
     });
 
-    // TODO: Send email notification with next episode
+    // Send email notification with next episode
+    // Only send if journey is not completed (endings don't have a next episode to continue)
+    if (!isEnding && updatedJourney.currentNode.episode) {
+      try {
+        await sendEpisodeNotification({
+          userId: session.user.id,
+          episodeId: updatedJourney.currentNode.episode.id,
+        });
+      } catch (emailError) {
+        // Log but don't fail the request if email fails
+        console.error('Failed to send adventure choice email:', emailError);
+      }
+    }
 
     return NextResponse.json({
       success: true,
