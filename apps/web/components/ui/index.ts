@@ -1,7 +1,7 @@
 // UI Component Library for Epoch Pod
 // Reusable components with consistent styling and behavior
 
-export { Button } from './button';
+export { Button, IconButton } from './button';
 export { Badge, EpisodeTypeBadge, StatusBadge } from './badge';
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, GradientCard } from './card';
 export { EmptyState, NoEpisodes, NoSearchResults, ErrorState, NoData } from './empty-state';

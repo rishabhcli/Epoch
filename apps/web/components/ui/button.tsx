@@ -1,17 +1,24 @@
 'use client';
 
-import { forwardRef, ButtonHTMLAttributes } from 'react';
+import { forwardRef, ButtonHTMLAttributes, ElementType, ComponentPropsWithoutRef } from 'react';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+// Polymorphic button props for rendering as different elements
+type ButtonOwnProps<E extends ElementType = 'button'> = {
+  as?: E;
   variant?: ButtonVariant;
   size?: ButtonSize;
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
-}
+  /** For links - makes button full width */
+  fullWidth?: boolean;
+};
+
+type ButtonProps<E extends ElementType = 'button'> = ButtonOwnProps<E> &
+  Omit<ComponentPropsWithoutRef<E>, keyof ButtonOwnProps<E>>;
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
@@ -55,43 +62,63 @@ const LoadingSpinner = () => (
   </svg>
 );
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  (
-    {
-      variant = 'primary',
-      size = 'md',
-      isLoading = false,
-      leftIcon,
-      rightIcon,
-      children,
-      className = '',
-      disabled,
-      ...props
-    },
-    ref
-  ) => {
-    return (
-      <button
-        ref={ref}
-        disabled={disabled || isLoading}
-        className={`
-          inline-flex items-center justify-center gap-2
-          font-medium rounded-lg
-          transition-all duration-200
-          focus:outline-none focus:ring-2 focus:ring-offset-2
-          disabled:opacity-50 disabled:cursor-not-allowed
-          ${variantStyles[variant]}
-          ${sizeStyles[size]}
-          ${className}
-        `}
-        {...props}
-      >
-        {isLoading ? <LoadingSpinner /> : leftIcon}
-        {children}
-        {!isLoading && rightIcon}
-      </button>
-    );
-  }
-);
+// Using a more flexible approach for polymorphic components
+export function Button<E extends ElementType = 'button'>({
+  as,
+  variant = 'primary',
+  size = 'md',
+  isLoading = false,
+  leftIcon,
+  rightIcon,
+  fullWidth = false,
+  children,
+  className = '',
+  disabled,
+  ...props
+}: ButtonProps<E>) {
+  const Component = as || 'button';
+  const isDisabled = disabled || isLoading;
 
-Button.displayName = 'Button';
+  return (
+    <Component
+      disabled={Component === 'button' ? isDisabled : undefined}
+      aria-disabled={isDisabled || undefined}
+      aria-busy={isLoading || undefined}
+      className={`
+        inline-flex items-center justify-center gap-2
+        font-medium rounded-lg
+        transition-all duration-200
+        focus:outline-none focus:ring-2 focus:ring-offset-2
+        disabled:opacity-50 disabled:cursor-not-allowed
+        aria-disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:pointer-events-none
+        ${variantStyles[variant]}
+        ${sizeStyles[size]}
+        ${fullWidth ? 'w-full' : ''}
+        ${className}
+      `}
+      {...props}
+    >
+      {isLoading ? <LoadingSpinner /> : leftIcon}
+      {children}
+      {!isLoading && rightIcon}
+    </Component>
+  );
+}
+
+// Icon-only button variant for accessibility
+export function IconButton({
+  'aria-label': ariaLabel,
+  children,
+  className = '',
+  ...props
+}: ButtonProps<'button'> & { 'aria-label': string }) {
+  return (
+    <Button
+      className={`!p-2 ${className}`}
+      aria-label={ariaLabel}
+      {...props}
+    >
+      {children}
+    </Button>
+  );
+}
